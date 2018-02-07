@@ -9,7 +9,7 @@ var TESTHUBENDPOINT_URL = '/testhub';
 
 describe('hubConnection', function () {
     eachTransportAndProtocol(function (transportType, protocol) {
-        describe(protocol.name + ' over ' + TransportType[transportType] + ' transport', function () {
+        describe('using ' + protocol.name + ' over ' + TransportType[transportType] + ' transport', function () {
             it('can invoke server method and receive result', function (done) {
                 var message = '你好，世界！';
 
@@ -23,18 +23,20 @@ describe('hubConnection', function () {
                     done();
                 });
 
-                hubConnection.start().then(function () {
-                    hubConnection.invoke('Echo', message).then(function (result) {
-                        expect(result).toBe(message);
-                    }).catch(function (e) {
-                        fail(e);
-                    }).then(function () {
-                        hubConnection.stop();
-                    });
-                }).catch(function (e) {
-                    fail(e);
-                    done();
-                });
+                throw "derp";
+
+                // hubConnection.start().then(function () {
+                //     hubConnection.invoke('Echo', message).then(function (result) {
+                //         expect(result).toBe(message);
+                //     }).catch(function (e) {
+                //         fail(e);
+                //     }).then(function () {
+                //         hubConnection.stop();
+                //     });
+                // }).catch(function (e) {
+                //     fail(e);
+                //     done();
+                // });
             });
 
             it('can invoke server method non-blocking and not receive result', function (done) {
@@ -465,7 +467,7 @@ describe('hubConnection', function () {
     });
 
     eachTransport(function (transportType) {
-        describe(' over ' + TransportType[transportType] + ' transport', function () {
+        describe('over ' + TransportType[transportType] + ' transport', function () {
 
             it('can connect to hub with authorization', async function (done) {
                 var message = '你好，世界！';

@@ -3,6 +3,10 @@
 
 import 'es6-promise/dist/es6-promise.auto.js';
 
+import { TAPReporter } from './TAPReporter'
+
+jasmine.getEnv().addReporter(new TAPReporter(console.log));
+
 import './ConnectionTests'
 import './HubConnectionTests'
 import './WebSocketTests'
