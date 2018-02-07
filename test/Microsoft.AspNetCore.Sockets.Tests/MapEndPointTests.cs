@@ -92,9 +92,14 @@ namespace Microsoft.AspNetCore.Sockets.Tests
         {
             public override async Task OnConnectedAsync(ConnectionContext connection)
             {
-                while (!await connection.Transport.Reader.WaitToReadAsync())
+                while (true)
                 {
+                    var result = await connection.Transport.Input.ReadAsync();
 
+                    if (result.IsCompleted)
+                    {
+                        break;
+                    }
                 }
             }
         }

@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Buffers;
+using System.Collections;
 using System.IO;
 using Microsoft.AspNetCore.SignalR.Internal.Formatters;
 using Newtonsoft.Json;
@@ -31,6 +33,7 @@ namespace Microsoft.AspNetCore.SignalR.Internal.Protocol
 
         public static bool TryParseMessage(ReadOnlySpan<byte> input, out NegotiationMessage negotiationMessage)
         {
+            // TODO: Remove this
             if (!TextMessageParser.TryParseMessage(ref input, out var payload))
             {
                 throw new InvalidDataException("Unable to parse payload as a negotiation message.");
@@ -52,6 +55,17 @@ namespace Microsoft.AspNetCore.SignalR.Internal.Protocol
                 }
             }
             return true;
+        }
+
+        public static bool TryParseMessage(ReadOnlyBuffer<byte> buffer, out NegotiationMessage negotiationMessage, out SequencePosition consumed, out SequencePosition examined)
+        {
+            // TODO: Make this incremental
+            consumed = buffer.End;
+            examined = consumed;
+
+            var memory = buffer.IsSingleSegment ? buffer.First : buffer.ToArray();
+
+            return TryParseMessage(memory.Span, out negotiationMessage);
         }
     }
 }
