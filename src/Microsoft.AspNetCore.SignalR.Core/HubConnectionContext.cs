@@ -40,7 +40,7 @@ namespace Microsoft.AspNetCore.SignalR
 
         public HubConnectionContext(ConnectionContext connectionContext, TimeSpan keepAliveInterval, ILoggerFactory loggerFactory)
         {
-            Output = Channel.CreateUnbounded<HubMessage>();
+            Output = Channel.CreateUnbounded<byte[]>();
             _connectionContext = connectionContext;
             _logger = loggerFactory.CreateLogger<HubConnectionContext>();
             ConnectionAbortedToken = _connectionAbortedTokenSource.Token;
@@ -63,7 +63,7 @@ namespace Microsoft.AspNetCore.SignalR
 
         public string UserIdentifier { get; private set; }
 
-        internal virtual Channel<HubMessage> Output { get; set; }
+        internal virtual Channel<byte[]> Output { get; set; }
 
         internal ExceptionDispatchInfo AbortException { get; private set; }
 
@@ -78,7 +78,7 @@ namespace Microsoft.AspNetCore.SignalR
 
         public int? LocalPort => Features.Get<IHttpConnectionFeature>()?.LocalPort;
 
-        public async Task WriteAsync(HubInvocationMessage message)
+        public async Task WriteAsync(byte[] message)
         {
             while (await Output.Writer.WaitToWriteAsync())
             {
@@ -196,10 +196,10 @@ namespace Microsoft.AspNetCore.SignalR
                 {
                     while (Output.Reader.TryRead(out var hubMessage))
                     {
-                        var buffer = ProtocolReaderWriter.WriteMessage(hubMessage);
+                        //var buffer = ProtocolReaderWriter.WriteMessage(hubMessage);
                         while (await _connectionContext.Transport.Writer.WaitToWriteAsync())
                         {
-                            if (_connectionContext.Transport.Writer.TryWrite(buffer))
+                            if (_connectionContext.Transport.Writer.TryWrite(hubMessage))
                             {
                                 Interlocked.Exchange(ref _lastSendTimestamp, Stopwatch.GetTimestamp());
                                 break;

@@ -76,6 +76,8 @@ namespace Microsoft.AspNetCore.SignalR
             var tasks = new List<Task>(count);
             var message = CreateInvocationMessage(methodName, args);
 
+            var msg = _connections.First().ProtocolReaderWriter.WriteMessage(message);
+
             // TODO: serialize once per format by providing a different stream?
             foreach (var connection in _connections)
             {
@@ -84,7 +86,7 @@ namespace Microsoft.AspNetCore.SignalR
                     continue;
                 }
 
-                tasks.Add(connection.WriteAsync(message));
+                tasks.Add(connection.WriteAsync(msg));
             }
 
             return Task.WhenAll(tasks);
@@ -105,8 +107,9 @@ namespace Microsoft.AspNetCore.SignalR
             }
 
             var message = CreateInvocationMessage(methodName, args);
+            var msg = connection.ProtocolReaderWriter.WriteMessage(message);
 
-            return connection.WriteAsync(message);
+            return connection.WriteAsync(msg);
         }
 
         public override Task SendGroupAsync(string groupName, string methodName, object[] args)
@@ -120,7 +123,8 @@ namespace Microsoft.AspNetCore.SignalR
             if (group != null)
             {
                 var message = CreateInvocationMessage(methodName, args);
-                var tasks = group.Values.Select(c => c.WriteAsync(message));
+                var msg = group.Values.First().ProtocolReaderWriter.WriteMessage(message);
+                var tasks = group.Values.Select(c => c.WriteAsync(msg));
                 return Task.WhenAll(tasks);
             }
 
@@ -143,7 +147,8 @@ namespace Microsoft.AspNetCore.SignalR
                 var group = _groups[groupName];
                 if (group != null)
                 {
-                    tasks.Add(Task.WhenAll(group.Values.Select(c => c.WriteAsync(message))));
+                    var msg = group.Values.First().ProtocolReaderWriter.WriteMessage(message);
+                    tasks.Add(Task.WhenAll(group.Values.Select(c => c.WriteAsync(msg))));
                 }
             }
 
@@ -161,8 +166,9 @@ namespace Microsoft.AspNetCore.SignalR
             if (group != null)
             {
                 var message = CreateInvocationMessage(methodName, args);
+                var msg = group.Values.First().ProtocolReaderWriter.WriteMessage(message);
                 var tasks = group.Values.Where(connection => !excludedIds.Contains(connection.ConnectionId))
-                    .Select(c => c.WriteAsync(message));
+                    .Select(c => c.WriteAsync(msg));
                 return Task.WhenAll(tasks);
             }
 
