@@ -12,12 +12,13 @@ namespace FunctionalTests
         public async override Task OnConnectedAsync(ConnectionContext connection)
         {
             var result = await connection.Transport.Input.ReadAsync();
+            var buffer = result.Buffer;
 
             try
             {
-                foreach (var segment in result.Buffer)
+                if (!buffer.IsEmpty)
                 {
-                    await connection.Transport.Output.WriteAsync(segment);
+                    await connection.Transport.Output.WriteAsync(buffer.ToArray());
                 }
             }
             finally

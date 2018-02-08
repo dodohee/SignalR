@@ -33,7 +33,6 @@ namespace Microsoft.AspNetCore.SignalR.Internal.Protocol
 
         public static bool TryParseMessage(ReadOnlySpan<byte> input, out NegotiationMessage negotiationMessage)
         {
-            // TODO: Remove this
             if (!TextMessageParser.TryParseMessage(ref input, out var payload))
             {
                 throw new InvalidDataException("Unable to parse payload as a negotiation message.");
@@ -59,9 +58,20 @@ namespace Microsoft.AspNetCore.SignalR.Internal.Protocol
 
         public static bool TryParseMessage(ReadOnlyBuffer<byte> buffer, out NegotiationMessage negotiationMessage, out SequencePosition consumed, out SequencePosition examined)
         {
-            // TODO: Make this incremental
-            consumed = buffer.End;
-            examined = consumed;
+            var separator = buffer.PositionOf(TextMessageFormatter.RecordSeparator);
+            if (separator == null)
+            {
+                // Haven't seen the entire negotiate message so bail
+                consumed = buffer.Start;
+                examined = buffer.End;
+                negotiationMessage = null;
+                return false;
+            }
+            else
+            {
+                consumed = buffer.GetPosition(separator.Value, 1);
+                examined = consumed;
+            }
 
             var memory = buffer.IsSingleSegment ? buffer.First : buffer.ToArray();
 

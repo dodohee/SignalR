@@ -1312,9 +1312,16 @@ namespace Microsoft.AspNetCore.Sockets.Tests
             {
                 var result = await connection.Transport.Input.ReadAsync();
 
-                if (result.IsCompleted)
+                try
                 {
-                    break;
+                    if (result.IsCompleted)
+                    {
+                        break;
+                    }
+                }
+                finally
+                {
+                    connection.Transport.Input.AdvanceTo(result.Buffer.End);
                 }
             }
         }
