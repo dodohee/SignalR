@@ -22,6 +22,7 @@ describe('hubConnection', function () {
                     expect(error).toBe(undefined);
                     done();
                 });
+                fail(new Error("Kaboom"));
 
                 hubConnection.start().then(function () {
                     hubConnection.invoke('Echo', message).then(function (result) {

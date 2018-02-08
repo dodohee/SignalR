@@ -9,6 +9,7 @@ const path = require("path");
 
 const argv = require("yargs").argv;
 const { Builder, By, logging } = require("selenium-webdriver");
+const kill = require("tree-kill");
 
 const rootDir = __dirname;
 
@@ -66,7 +67,7 @@ async function isComplete(element) {
 
 async function getLogEntry(index, element) {
     let elements = await element.findElements(By.id(`__tap_item_${index}`));
-    if(elements && elements.length > 0) {
+    if (elements && elements.length > 0) {
         return elements[0];
     }
     return null;
@@ -78,7 +79,7 @@ async function renderEntry(element) {
 
 async function flushEntries(index, element) {
     let entry = await getLogEntry(index, element);
-    while(entry) {
+    while (entry) {
         index += 1;
         await renderEntry(entry);
         entry = await getLogEntry(index, element);
@@ -104,7 +105,7 @@ async function runTests(port, serverUrl) {
         let element = await waitForElement(driver, "__tap_list");
         while (!await isComplete(element)) {
             let entry = await getLogEntry(index, element);
-            if(entry) {
+            if (entry) {
                 index += 1;
                 await renderEntry(entry);
             }
@@ -148,14 +149,7 @@ function waitForMatch(command, process, stream, regex, onMatch) {
     }
 
     process.on("close", (code, signal) => {
-        if (code != 0) {
-            console.error(`${command} process exited with code: ${code}`);
-            process.exit(code);
-        }
-        else {
-            console.log(`${command} process exited early`);
-            process.exit(1);
-        }
+        console.log(`# ${command} process exited with code: ${code}`);
     })
 
     stream.on("data", onData);
@@ -172,22 +166,30 @@ console.log("# Updated WebDrivers");
 let webDriver;
 let dotnet;
 
-function cleanup() {
-    if(dotnet && !dotnet.killed) {
+function cleanupDotNet(cb) {
+    if (dotnet && !dotnet.killed) {
         console.log(`# Killing dotnet process (PID: ${dotnet.pid})`);
-        kill(dotnet.pid);
-        console.log("# Killed dotnet process");
+        kill(dotnet.pid, () => {
+            console.log("# Killed dotnet process");
+            cb();
+        });
     }
-    if(webDriver && !webDriver.killed) {
-        console.log(`# Killing webdriver-manager process (PID: ${webDriver.pid})`);
-        kill(webDriver.pid);
-        console.log("# Killed webdriver-manager process");
+    else {
+        cb();
     }
 }
 
-process.on("exit", cleanup);
-process.on("SIGINT", cleanup);
-process.on("uncaughtException", cleanup);
+function cleanup(cb) {
+    if (webDriver && !webDriver.killed) {
+        console.log(`# Killing webdriver-manager process (PID: ${webDriver.pid})`);
+        kill(webDriver.pid, () => {
+            console.log("# Killed webdriver-manager process");
+            cleanupDotNet(cb)
+        });
+    } else {
+        cleanupDotNet(cb);
+    }
+}
 
 console.log("# Launching WebDriver...");
 webDriver = spawn(process.execPath, [webDriverManagerPath, "start"]);
@@ -200,7 +202,7 @@ waitForMatch("webdriver-server", webDriver, webDriver.stderr, regex, (results) =
     webDriverLaunched(Number.parseInt(results[1]), () => {
         try {
             // Clean up is automatic
-            process.exit(0);
+            cleanup(() => process.exit(0));
         } catch (e) {
             console.error(`Error terminating WebDriver: ${e}`);
         }

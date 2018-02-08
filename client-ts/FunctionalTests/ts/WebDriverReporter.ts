@@ -32,13 +32,16 @@ class WebDriverReporter implements jasmine.CustomReporter {
     }
 
     specDone(result: jasmine.CustomReporterResult): void {
+        let message: string;
+
         if (result.status === "failed") {
-            this.taplog(`not ok ${this.spec_counter} ${result.fullName}`);
+            message = `not ok ${this.spec_counter} ${result.fullName}` 
         }
         else {
-            this.taplog(`ok ${this.spec_counter} ${result.fullName}`);
+            message = `ok ${this.spec_counter} ${result.fullName}`);
         }
 
+        this.taplog(message);
         this.spec_counter += 1;
     }
 
