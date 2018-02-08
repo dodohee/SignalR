@@ -23,20 +23,18 @@ describe('hubConnection', function () {
                     done();
                 });
 
-                throw "derp";
-
-                // hubConnection.start().then(function () {
-                //     hubConnection.invoke('Echo', message).then(function (result) {
-                //         expect(result).toBe(message);
-                //     }).catch(function (e) {
-                //         fail(e);
-                //     }).then(function () {
-                //         hubConnection.stop();
-                //     });
-                // }).catch(function (e) {
-                //     fail(e);
-                //     done();
-                // });
+                hubConnection.start().then(function () {
+                    hubConnection.invoke('Echo', message).then(function (result) {
+                        expect(result).toBe(message);
+                    }).catch(function (e) {
+                        fail(e);
+                    }).then(function () {
+                        hubConnection.stop();
+                    });
+                }).catch(function (e) {
+                    fail(e);
+                    done();
+                });
             });
 
             it('can invoke server method non-blocking and not receive result', function (done) {

@@ -1,41 +1,42 @@
 #!/usr/bin/env node
 
-const spawn = require("child_process").spawn;
-const os = require("os");
-const argv = require("yargs").argv;
+// console.log messages should be prefixed with "#" to ensure stdout continues to conform to TAP (Test Anything Protocol)
+// https://testanything.org/tap-version-13-specification.html
 
-const { Builder, logging } = require("selenium-webdriver");
+const { spawn, spawnSync } = require("child_process");
+const os = require("os");
+const path = require("path");
+
+const argv = require("yargs").argv;
+const { Builder, By, logging } = require("selenium-webdriver");
 
 const rootDir = __dirname;
 
-let args = process.argv.slice(2);
-for (let i = 0; i < args.length; i += 1) {
-    switch(args[i]) {
-        case "-v":
-            verboseEnabled = true;
-            break;
-    }
-}
+let verbose = argv.v || argv.verbose || false;
+let browser = argv.browser || "chrome";
+let headless = argv.headless || argv.h || false;
 
-function verbose(message) {
-    if (argv.v || argv.verbose) {
+function logverbose(message) {
+    if (verbose) {
         console.log(message);
     }
 }
 
-// This script launches the functional test app and then uses Selenium WebDriver to run the tests and verify the results.
-
-console.log("# Launching Functional Test server");
-let dotnet = spawn("dotnet", ["run", "--no-build"], {
-    cwd: rootDir,
-});
-
-process.on("SIGINT", () => {
-    if (!dotnet.killed) {
-        console.log("# Killing dotnet.exe server process");
-        dotnet.kill();
+function runCommand(command, args) {
+    args = args || [];
+    let result = spawnSync(command, args, {
+        cwd: rootDir
+    });
+    if (result.status !== 0) {
+        console.error("Bail out!"); // Part of the TAP protocol
+        console.error(`Command ${command} ${args.join(" ")} failed:`);
+        console.error("stderr:");
+        console.error(result.stderr);
+        console.error("stdout:");
+        console.error(result.stdout);
+        process.exit(result.status);
     }
-})
+}
 
 const logExtractorRegex = /[^ ]+ [^ ]+ "(.*)"/
 
@@ -50,84 +51,176 @@ function getMessage(logMessage) {
     }
 }
 
-async function runTests(serverUrl) {
-    console.log("# Launching browser at " + serverUrl);
+async function waitForElement(driver, id) {
+    while (true) {
+        let elements = await driver.findElements(By.id(id));
+        if (elements && elements.length > 0) {
+            return elements[0];
+        }
+    }
+}
+
+async function isComplete(element) {
+    return (await element.getAttribute("data-done")) === "1";
+}
+
+async function getLogEntry(index, element) {
+    let elements = await element.findElements(By.id(`__tap_item_${index}`));
+    if(elements && elements.length > 0) {
+        return elements[0];
+    }
+    return null;
+}
+
+async function renderEntry(element) {
+    console.log(await element.getAttribute("innerHTML"));
+}
+
+async function flushEntries(index, element) {
+    let entry = await getLogEntry(index, element);
+    while(entry) {
+        index += 1;
+        await renderEntry(entry);
+        entry = await getLogEntry(index, element);
+    }
+}
+
+async function runTests(port, serverUrl) {
+    let webDriverUrl = `http://localhost:${port}/wd/hub`;
+    console.log("# Using WebDriver at " + webDriverUrl);
+    console.log("# Launching browser to " + serverUrl);
     let logPrefs = new logging.Preferences();
     logPrefs.setLevel(logging.Type.BROWSER, logging.Level.INFO);
 
     let driver = await new Builder()
-        .usingServer("http://localhost:4444/wd/hub")
+        .usingServer(webDriverUrl)
         .setLoggingPrefs(logPrefs)
-        .forBrowser(argv.browser || "chrome")
+        .forBrowser(browser)
         .build();
     try {
         await driver.get(serverUrl);
-        let complete = false;
-        while (!complete) {
-            let logs = await driver.manage().logs().get("browser");
-            for (let log of logs) {
-                let message = getMessage(log.message);
-                if (message.startsWith("##tap:")) {
-                    console.log(message.substring(6));
-                }
-                else if (message === "##tapend") {
-                    // End of the tests, terminate!
-                    complete = true;
-                    break;
-                }
+
+        let index = 0;
+        let element = await waitForElement(driver, "__tap_list");
+        while (!await isComplete(element)) {
+            let entry = await getLogEntry(index, element);
+            if(entry) {
+                index += 1;
+                await renderEntry(entry);
             }
         }
+
+        // Flush remaining entries
+        await flushEntries(index, element);
         console.log("# End of tests");
     }
     catch (e) {
-        console.error("Error from browser: " + e.toString());
+        console.error("Error: " + e.toString());
     }
     finally {
         await driver.quit();
     }
 }
 
-let lastLine = "";
-const regex = /Now listening on: (http:\/\/localhost:([\d])+)/;
-async function onData(chunk) {
-    chunk = chunk.toString();
+function waitForMatch(command, process, stream, regex, onMatch) {
+    let lastLine = "";
+    async function onData(chunk) {
+        chunk = chunk.toString();
 
-    // Process lines
-    let lineEnd = chunk.indexOf(os.EOL);
-    while (lineEnd >= 0) {
-        let chunkLine = lastLine + chunk.substring(0, lineEnd);
-        lastLine = "";
+        // Process lines
+        let lineEnd = chunk.indexOf(os.EOL);
+        while (lineEnd >= 0) {
+            let chunkLine = lastLine + chunk.substring(0, lineEnd);
+            lastLine = "";
 
-        chunk = chunk.substring(lineEnd + os.EOL.length);
+            chunk = chunk.substring(lineEnd + os.EOL.length);
 
-        verbose("dotnet: " + chunkLine);
-        let results = regex.exec(chunkLine);
-        if (results && results.length > 0) {
-            try {
-                await runTests(results[1])
-                dotnet.stdout.removeAllListeners("data");
-                dotnet.kill();
-                console.log("# Server process shut down. Testing completed");
-                process.exit(0);
-            } catch (e) {
-                console.error("Error running tests: " + e.toString());
+            logverbose(`# ${command}: ${chunkLine}`);
+            let results = regex.exec(chunkLine);
+            if (results && results.length > 0) {
+                onMatch(results);
+                stream.removeAllListeners("data");
+                return;
             }
+            lineEnd = chunk.indexOf(os.EOL);
         }
-        lineEnd = chunk.indexOf(os.EOL);
+        lastLine = chunk.toString();
     }
 
-    lastLine = chunk.toString();
+    process.on("close", (code, signal) => {
+        if (code != 0) {
+            console.error(`${command} process exited with code: ${code}`);
+            process.exit(code);
+        }
+        else {
+            console.log(`${command} process exited early`);
+            process.exit(1);
+        }
+    })
+
+    stream.on("data", onData);
 }
 
-dotnet.on("close", (code, signal) => {
-    if(code != 0) {
-        console.error(`Server process exited with code: ${code}`);
-        process.exit(code);
-    }
-    else {
-        console.log(`Server process exited early`);
-        process.exit(1);
-    }
-})
 
-dotnet.stdout.on("data", onData);
+let webDriverManagerPath = path.resolve(__dirname, "node_modules", "webdriver-manager", "bin", "webdriver-manager");
+
+// This script launches the functional test app and then uses Selenium WebDriver to run the tests and verify the results.
+console.log("# Updating WebDrivers...");
+runCommand(process.execPath, [webDriverManagerPath, "update"]);
+console.log("# Updated WebDrivers");
+
+let webDriver;
+let dotnet;
+
+function cleanup() {
+    if(dotnet && !dotnet.killed) {
+        console.log(`# Killing dotnet process (PID: ${dotnet.pid})`);
+        kill(dotnet.pid);
+        console.log("# Killed dotnet process");
+    }
+    if(webDriver && !webDriver.killed) {
+        console.log(`# Killing webdriver-manager process (PID: ${webDriver.pid})`);
+        kill(webDriver.pid);
+        console.log("# Killed webdriver-manager process");
+    }
+}
+
+process.on("exit", cleanup);
+process.on("SIGINT", cleanup);
+process.on("uncaughtException", cleanup);
+
+console.log("# Launching WebDriver...");
+webDriver = spawn(process.execPath, [webDriverManagerPath, "start"]);
+
+const regex = /\d+:\d+:\d+.\d+ INFO - Selenium Server is up and running on port (\d+)/;
+
+// The message we're waiting for is written to stderr for some reason
+waitForMatch("webdriver-server", webDriver, webDriver.stderr, regex, (results) => {
+    console.log("# WebDriver Launched");
+    webDriverLaunched(Number.parseInt(results[1]), () => {
+        try {
+            // Clean up is automatic
+            process.exit(0);
+        } catch (e) {
+            console.error(`Error terminating WebDriver: ${e}`);
+        }
+    });
+});
+
+function webDriverLaunched(webDriverPort, cb) {
+    console.log("# Launching Functional Test server...");
+    dotnet = spawn("dotnet", [path.resolve(__dirname, "bin", "Debug", "netcoreapp2.1", "FunctionalTests.dll")], {
+        cwd: rootDir,
+    });
+
+    const regex = /Now listening on: (http:\/\/localhost:([\d])+)/;
+    waitForMatch("dotnet", dotnet, dotnet.stdout, regex, async (results) => {
+        try {
+            console.log("# Functional Test server launched.");
+            await runTests(webDriverPort, results[1]);
+            cb();
+        } catch (e) {
+            console.error(`Error running tests: ${e}`);
+        }
+    });
+}
