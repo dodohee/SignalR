@@ -100,6 +100,9 @@ namespace Microsoft.AspNetCore.Sockets.Tests
                     {
                         break;
                     }
+
+                    // Consume nothing
+                    connection.Transport.Input.AdvanceTo(result.Buffer.Start);
                 }
             }
         }
