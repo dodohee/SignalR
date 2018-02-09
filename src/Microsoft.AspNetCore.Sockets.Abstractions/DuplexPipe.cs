@@ -1,5 +1,4 @@
-﻿using System.Buffers;
-
+﻿
 namespace System.IO.Pipelines
 {
     public class DuplexPipe : IDuplexPipe
@@ -17,11 +16,6 @@ namespace System.IO.Pipelines
         public void Dispose()
         {
             
-        }
-
-        public static (IDuplexPipe Transport, IDuplexPipe Application) CreateConnectionPair(MemoryPool<byte> memoryPool)
-        {
-            return CreateConnectionPair(new PipeOptions(memoryPool), new PipeOptions(memoryPool));
         }
 
         public static (IDuplexPipe Transport, IDuplexPipe Application) CreateConnectionPair(PipeOptions inputOptions, PipeOptions outputOptions)
