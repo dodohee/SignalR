@@ -112,8 +112,7 @@ namespace Microsoft.AspNetCore.Sockets.Internal.Transports
         {
             while (true)
             {
-                // REVIEW: Do we need to pass a size?
-                var memory = _application.Output.GetMemory(2048);
+                var memory = _application.Output.GetMemory();
 
                 // REVIEW: Use new Memory<byte> websocket APIs on .NET Core 2.1
                 memory.TryGetArray(out var arraySegment);
