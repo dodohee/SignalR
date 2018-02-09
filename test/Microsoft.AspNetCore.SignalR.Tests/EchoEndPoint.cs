@@ -23,7 +23,7 @@ namespace Microsoft.AspNetCore.SignalR.Tests
             }
             finally
             {
-                connection.Transport.Input.AdvanceTo(result.Buffer.End);
+                connection.Transport.Input.AdvanceTo(buffer.End);
             }
         }
     }
